@@ -1,0 +1,39 @@
+
+{
+    "bg": {
+        "key": "_",
+        "color": [255, 0, 0]
+    },
+    "hair": {
+        "key": "h",
+        "color": [255, 128, 0]
+    },
+    "skin": {
+        "key": "f",
+        "color": [180, 180, 255]
+    },
+    "neck": {
+        "key": "n",
+        "color": [130, 130, 170]
+    },
+    "lip": {
+        "key": "l",
+        "color": [0, 0, 255]
+    },
+    "eye(side)": {
+        "key": "w",
+        "color": [255, 255, 255]
+    },
+    "eye(center)": {
+        "key": "c",
+        "color": [0, 255, 0]
+    },
+    "eyebrow": {
+        "key": "b",
+        "color": [0, 0, 0]
+    },
+    "accessaries": {
+        "key": "a",
+        "color": [255, 255, 0]
+    }
+}
