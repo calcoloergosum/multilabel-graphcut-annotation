@@ -5,23 +5,25 @@ import scipy.stats
 from scipy.special import logsumexp
 
 
-BGRMean = np.ndarray
-BGRCovarianceMatrix = np.ndarray
-Model = Tuple[List[Tuple[BGRMean, ...]], List[Tuple[BGRCovarianceMatrix, ...]]]
+Model = Tuple[
+    np.ndarray,  # mean
+    np.ndarray,  # covariance
+    np.ndarray,  # mix coefficient
+]
 
 
 def fit_model(
     vs: np.ndarray,
     ls: np.ndarray,
     n_class: int,
-    model: Model,
+    model: Optional[Model],
 ) -> Optional[Model]:
     """Fit gaussian mixture using EM-like momentum method.
 
     Args:
         vs (np.ndarray): values of shape (n_data, n_dimension)
         ls (np.ndarray): known labels of shape (n_data,), whose values are in range [0, n_class - 1]
-        model (Model): model to use as a starting point
+        model (Optional[Model]): model to use as a starting point. If None, use preset initial values.
 
     Returns:
         None if fitting failed for whatever reason.

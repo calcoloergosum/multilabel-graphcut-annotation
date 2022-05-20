@@ -1,4 +1,4 @@
-# Multi-label Annotation tool
+# Multi-label Graph Cut Annotation tool
 
 ![Usage demo](asset/demo.gif)
 

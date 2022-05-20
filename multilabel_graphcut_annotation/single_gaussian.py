@@ -5,7 +5,11 @@ import numpy as np
 
 BGRMean = np.ndarray
 BGRCovarianceMatrix = np.ndarray
-Model = Tuple[List[BGRMean], List[BGRCovarianceMatrix]]
+Model = Tuple[
+    np.ndarray,  # mean
+    np.ndarray,  # covariance
+]
+
 
 def fit_model(vs: np.ndarray, ls: np.ndarray, n_class: int) -> Optional[Model]:
     """Calculate parameters in MLE manner.
@@ -24,9 +28,7 @@ def fit_model(vs: np.ndarray, ls: np.ndarray, n_class: int) -> Optional[Model]:
         covar = dev.T @ dev / len(bgrs)
         label_means.append(mean)
         label_covars.append(covar)
-    label_means = np.array(label_means)
-    label_covars = np.array(label_covars)
-    return label_means, label_covars
+    return np.array(label_means), np.array(label_covars)
 
 
 def pixelwise_likelihood(image: np.ndarray, model: Model) -> np.ndarray:

@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cv2
-from multilabel_graphcut.app import event_loop, MultiLabelState, read_label_definitions
+from multilabel_graphcut_annotation.app import event_loop, MultiLabelState, read_label_definitions
 
 
 def main():

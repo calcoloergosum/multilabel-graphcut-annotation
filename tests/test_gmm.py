@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from multilabel_graphcut.gmm import solve
+from multilabel_graphcut_annotation.gmm import solve
 
 
 @pytest.mark.parametrize('cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp', [
