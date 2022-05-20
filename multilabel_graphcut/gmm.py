@@ -1,3 +1,4 @@
+"""Gaussian mixture model"""
 from typing import List, Tuple
 import numpy as np
 import scipy.stats
@@ -67,7 +68,17 @@ def fit_model(
     return label_means, label_covars, mixs
 
 
-def get_unary(image: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
+def pixelwise_likelihood(image: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
+    """Return pixelwise likelihood
+
+    Args:
+        image (np.ndarray): of shape (N, C)
+        weights (np.ndarray): sample size used to derive each value of given image. e.g. Area of superpixels
+        model (Model): model
+
+    Returns:
+        np.ndarray: N x label
+    """
     label_means, label_covars, mixs = model
     dev = image[:, None, None, :] - label_means[None, :, :, :]  # (pixels, label, gmm, C)
     unary = 0.5 * (

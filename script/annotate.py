@@ -4,9 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cv2
-from multilabel_graphcut.app import event_loop
-from multilabel_graphcut.common import MultiLabelState
-from multilabel_graphcut.labels import read_labels
+from multilabel_graphcut.app import event_loop, MultiLabelState, read_label_definitions
 
 
 def main():
@@ -17,7 +15,7 @@ def main():
     parser.add_argument("--label-config", "-c", type=Path, default=Path(__file__).parent / 'label_definitions' / 'human.json')
     args = parser.parse_args()
 
-    labels = read_labels(args.label_config)
+    labels = read_label_definitions(args.label_config)
 
     # event loop
     for p in sorted(args.dir.rglob(args.filename_pattern)):
@@ -41,9 +39,8 @@ def main():
         if state is None:
             p.unlink()
             continue
-        cv2.imwrite(save_label.as_posix(), state.labelmap)
-        cv2.imwrite(save_image.as_posix(), state.image)
-        cv2.imwrite(save_mask.as_posix(), state.user_mask)
+        state.save(save_dir, p.stem)
+
     print("Done!")
 
 if __name__ == '__main__':

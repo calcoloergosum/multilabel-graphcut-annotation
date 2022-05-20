@@ -1,32 +1,166 @@
+"""Application is defined here"""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
-import bresenham
+from typing import Any, List, Optional, Tuple
 
+import bresenham
 import cv2
 import gco
 import numpy as np
+import skimage.measure
+import skimage.segmentation
+from skimage.future.graph import RAG, rag_mean_color
 
-from multilabel_graphcut.common import Labels, MultiLabelState, Point2D
-from multilabel_graphcut.gmm import fit_model, get_unary
-# from multilabel_graphcut.single_gaussian import fit_model, get_unary
+from multilabel_graphcut.gmm import fit_model, pixelwise_likelihood
+# from multilabel_graphcut.single_gaussian import fit_model, pixelwise_likelihood
 
+
+Point2D = Tuple[float, float]
+BGRColor = Tuple[float, float, float]
+Labels = List[Tuple[str, str, BGRColor]]
 
 CACHE_DIR = Path(".simple_multilabel_graphcut")
 
 
+def read_label_definitions(path: Path) -> Labels:
+    """Read label definition"""
+    with path.open('r') as f:
+        contents = json.load(f)
+        for value in contents.values():
+            value['color'] = tuple(value['color'])
+    return [(k, v["key"], v["color"]) for k, v in contents.items()]
+
+
+@dataclass
+class MultiLabelState:
+    """Collection of multi-label graph cut related variables"""
+    # pylint: disable=too-many-instance-attributes
+    image: np.ndarray     # H x W x C
+    user_mask: np.ndarray # H x W x bool
+    labelmap: np.ndarray    # H x W x int
+    model: Optional[Any]
+
+    # Superpixel
+    _n_segments: int = 16384
+    _segment_vis: np.ndarray = None
+    _segment_labelmap: np.ndarray = None
+    _segment_rag: RAG = None
+    _segment_regions: List = None
+
+    grabcut_gamma: float = 100.0
+
+    @classmethod
+    def new(cls, image: np.ndarray) -> MultiLabelState:
+        """Default constructor"""
+        return cls(
+            image,
+            np.zeros(image.shape[:2], dtype=np.uint8),
+            np.zeros(image.shape[:2], dtype=np.uint8),
+            None,
+        )
+
+    @classmethod
+    def load(cls, path: Path, prefix: str) -> MultiLabelState:
+        """load from a path"""
+        return cls(
+            cv2.imread((path / f"{prefix}_image.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
+            cv2.imread((path / f"{prefix}_user_mask.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
+            cv2.imread((path / f"{prefix}_labels.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
+            None,
+            None,
+            None,
+        )
+
+    def save(self, path: Path, prefix: str) -> None:
+        """Save to a file so that it can be continued later"""
+        path.mkdir(exist_ok=True, parents=False)
+        cv2.imwrite((path / f"{prefix}_image.png").as_posix(), self.image)
+        cv2.imwrite((path / f"{prefix}_labels.png").as_posix(), self.labelmap)
+        cv2.imwrite((path / f"{prefix}_user_mask.png").as_posix(), self.user_mask)
+
+    # superpixel related
+    @property
+    def n_segments(self) -> int:
+        """Number of segments"""
+        return self._n_segments
+
+    @n_segments.setter
+    def n_segments(self, value: int) -> None:
+        """Number of segments; resets all the cached properties"""
+        self._n_segments = value
+        self._segment_labelmap = None
+        self._segment_rag = None
+        self._segment_regions = None
+        self._segment_vis = None
+
+    @property
+    def segment_labelmap(self) -> np.ndarray:
+        """cached property of superpixel segments. Pixel -> region id"""
+        if self._segment_labelmap is None:
+            segment_labelmap = skimage.segmentation.slic(
+                self.image,
+                n_segments=self.n_segments, compactness=10,
+                multichannel=True,
+                enforce_connectivity=True,
+                convert2lab=True,
+                start_label=1)
+            self._segment_labelmap = segment_labelmap
+        return self._segment_labelmap
+
+    @property
+    def segment_regions(self) -> List[skimage.measure._regionprops.RegionProperties]:
+        """cached property of superpixel regions"""
+        if self._segment_regions is None:
+            self._segment_regions = skimage.measure.regionprops(
+                self.segment_labelmap,
+                intensity_image=self.image,
+                cache=True,
+            )
+            for ridx, region in enumerate(self._segment_regions):
+                assert (self._segment_labelmap[tuple(region.coords.T)] - 1 == ridx).all()
+                assert ridx == region.label - 1
+                assert region.coords.size > 0
+        return self._segment_regions
+
+    @property
+    def segment_rag(self) -> RAG:
+        """cached property of superpixel region affinity graph"""
+        if self._segment_rag is None:
+            self._segment_rag = rag_mean_color(self.image, self.segment_labelmap, connectivity=2)
+        return self._segment_rag
+
+    @property
+    def segment_vis(self) -> np.ndarray:
+        """cached property of superpixel visualization"""
+        if self._segment_vis is None:
+            self._segment_vis = visualize_superpixel(self.image, self.segment_regions)
+        return self._segment_vis
+
+
+def visualize_superpixel(image: np.ndarray, regions) -> np.ndarray:
+    """Return superpixel visualized"""
+    superpixels = np.empty_like(image)
+    for region in regions:
+        ys, xs = region.coords.T
+        superpixels[ys, xs] = region.mean_intensity
+    return superpixels
+
+
 @dataclass
 class UIState:
+    """Collection of UI related variables"""
+    # pylint: disable=too-many-instance-attributes
     # Show
     image:       np.ndarray  # H x W x C
     image_label: np.ndarray  # H x W x C
     window_name: str
 
     # Scribble
+    scribble_stack: List[Point2D]
     mode: str = None
-    scribble_stack: List[Point2D] = None
     down_at: Optional[Point2D] = None
     cur_label_idx = 0
 
@@ -37,17 +171,23 @@ class UIState:
     n_segments: int = 16384
     smoothness: int = 1
 
+    # Undo
+    last_user_mask: Optional[np.ndarray] = None
+    last_labels: Optional[np.ndarray] = None
+
     @classmethod
-    def new(cls, image):
+    def new(cls, image: np.ndarray) -> UIState:
+        """Constructor"""
         return cls(
             image.copy(), 40 * np.ones_like(image),
             'annotation tool',
-            calculation_pending=False,
             scribble_stack=[],
+            calculation_pending=False,
         )
 
 
 def event_loop(state: MultiLabelState, labels: Labels):
+    """Consume user input"""
     n_labels = len(labels)
     assert n_labels < 255, "too many labels .."
     assert n_labels == len(set(n for n, _, _ in labels)), "overlapping names"
@@ -59,7 +199,8 @@ def event_loop(state: MultiLabelState, labels: Labels):
             if opname == 'scribble':
                 state = draw(state, *user_input)
             elif opname == 'superpixel':
-                state = update_superpixels(state, *user_input)
+                n_segments, = user_input
+                state.n_segments = n_segments
             elif opname == 'iterate':
                 state = iterate(state, labels, *user_input)
             elif opname == 'quit':
@@ -73,8 +214,9 @@ def event_loop(state: MultiLabelState, labels: Labels):
                 raise NotImplementedError(opname, *user_input)
 
 
-def fit(state: MultiLabelState, labels: Labels, label2compressed: np.ndarray) -> MultiLabelState:
-    # when fittig model, we calculate PIXELWISE.
+def fit(state: MultiLabelState, label2compressed: np.ndarray) -> MultiLabelState:
+    """Do model fitting here; pixelwise.
+    """
     xs_gt = np.nonzero(state.user_mask.flatten() > 0)
     label_flat = state.labelmap.flatten()
     image_flat = state.image.reshape(-1, state.image.shape[-1])
@@ -88,8 +230,11 @@ def fit(state: MultiLabelState, labels: Labels, label2compressed: np.ndarray) ->
     return fit_model(img, label2compressed[lab], label2compressed.max() + 1, None)
 
 
-def iterate(state: MultiLabelState, labels: Labels, smoothness: int):
-    state.save(CACHE_DIR)
+def iterate(state: MultiLabelState, labels: Labels):
+    """Calculate next iteration, given labels.
+    """
+    # pylint: disable=too-many-locals
+    state.save(CACHE_DIR, "cache")
 
     # fit the model
     # Add conversion so that non-existent labels are not mendatory
@@ -102,7 +247,7 @@ def iterate(state: MultiLabelState, labels: Labels, smoothness: int):
 
     # Routine start
     # fit model
-    state.model = fit(state, labels, label2compressed)
+    state.model = fit(state, label2compressed)
     if state.model is None:
         return state
 
@@ -117,7 +262,7 @@ def iterate(state: MultiLabelState, labels: Labels, smoothness: int):
     ls_gt = label_flat[xs_gt]
 
     # calculate likelihood
-    unary_flat = get_unary(image_flat, weights, state.model)
+    unary_flat = pixelwise_likelihood(image_flat, weights, state.model)
 
     # hard assignment for user inputs
     unary_flat[xs_gt] = 10000.0
@@ -145,9 +290,8 @@ def iterate(state: MultiLabelState, labels: Labels, smoothness: int):
     labels_flat = gco.cut_general_graph(mns, edge_costs, unary_flat, pairwise,)
 
     labels = np.empty_like(state.labelmap, dtype=np.uint8)
-    rs = state.segment_regions
-    for ridx, r in enumerate(rs):
-        labels[tuple(r.coords.T)] = compressed2labels[labels_flat[ridx]]
+    for ridx, reg in enumerate(state.segment_regions):
+        labels[tuple(reg.coords.T)] = compressed2labels[labels_flat[ridx]]
 
     labels[state.user_mask > 0] = state.labelmap[state.user_mask > 0]
 
@@ -157,32 +301,34 @@ def iterate(state: MultiLabelState, labels: Labels, smoothness: int):
     return state
 
 
-def user_input_loop(state: MultiLabelState, labels: Labels, use_superpixels: bool = True):
-    ui = UIState.new(image=state.image)
-    yield ('superpixel', ui.n_segments)
+def user_input_loop(state: MultiLabelState, labels: Labels):
+    """Loop over user inputs and give commands to the main function"""
+    # pylint: disable=too-many-statements,too-many-branches
+    uistate = UIState.new(image=state.image)
+    yield ('superpixel', uistate.n_segments)
 
-    cv2.namedWindow(ui.window_name, cv2.WINDOW_AUTOSIZE)
-    cv2.setMouseCallback(ui.window_name, lambda *args: mouse_callback(ui, labels, *args))
+    cv2.namedWindow(uistate.window_name, cv2.WINDOW_AUTOSIZE)
+    cv2.setMouseCallback(uistate.window_name, lambda *args: mouse_callback(uistate, labels, *args))
     cv2.namedWindow('superpixels', cv2.WINDOW_AUTOSIZE)
-    cv2.setMouseCallback('superpixels', lambda *args: mouse_callback(ui, labels, *args))
+    cv2.setMouseCallback('superpixels', lambda *args: mouse_callback(uistate, labels, *args))
 
     def reload():
-        ui.image_label = np.empty_like(state.image)
+        uistate.image_label = np.empty_like(state.image)
         for i, label in enumerate(labels):
-            ui.image_label[state.labelmap == i] = label[2]
-        ui.image = cv2.addWeighted(state.image, 0.8, ui.image_label, 0.2, 1.0)
+            uistate.image_label[state.labelmap == i] = label[2]
+        uistate.image = cv2.addWeighted(state.image, 0.8, uistate.image_label, 0.2, 1.0)
 
     while True:
         cv2.imshow("user mask", state.user_mask)
         cv2.imshow('superpixels', state.segment_vis)
-        cv2.imshow("labels", ui.image_label)
-        cv2.imshow(ui.window_name, ui.image)
+        cv2.imshow("labels", uistate.image_label)
+        cv2.imshow(uistate.window_name, uistate.image)
 
         k = cv2.waitKey(50)
-        if ui.calculation_pending:
-            yield ("iterate", ui.smoothness)
+        if uistate.calculation_pending:
+            yield ("iterate",)
             reload()
-            ui.calculation_pending = False
+            uistate.calculation_pending = False
 
         # process keyboard
         if k != 0xff:
@@ -196,15 +342,15 @@ def user_input_loop(state: MultiLabelState, labels: Labels, use_superpixels: boo
                 yield ("quit and delete",)
                 break
             if k == ord('+'):
-                ui.n_segments *= 1.5
-                ui.n_segments = int(ui.n_segments)
-                print("superpixel:", ui.n_segments)
-                yield ('superpixel', ui.n_segments)
+                uistate.n_segments *= 1.5
+                uistate.n_segments = int(uistate.n_segments)
+                print("superpixel:", uistate.n_segments)
+                yield ('superpixel', uistate.n_segments)
             if k == ord('-'):
-                ui.n_segments /= 1.5
-                ui.n_segments = int(ui.n_segments)
-                print("superpixel:", ui.n_segments)
-                yield ('superpixel', ui.n_segments)
+                uistate.n_segments /= 1.5
+                uistate.n_segments = int(uistate.n_segments)
+                print("superpixel:", uistate.n_segments)
+                yield ('superpixel', uistate.n_segments)
 
             if k == ord('>'):
                 state.grabcut_gamma *= 1.2
@@ -214,82 +360,75 @@ def user_input_loop(state: MultiLabelState, labels: Labels, use_superpixels: boo
                 print("grabcut_gamma:", state.grabcut_gamma)
 
             if k == ord(' '):
-                yield ("iterate", ui.smoothness)
+                yield ("iterate",)
                 reload()
 
             if k == ord('\t'):
-                ui.cur_label_idx += 1
-                ui.cur_label_idx %= len(labels)
-                print("Labeling with:", labels[ui.cur_label_idx][0])
+                uistate.cur_label_idx += 1
+                uistate.cur_label_idx %= len(labels)
+                print("Labeling with:", labels[uistate.cur_label_idx][0])
 
         # process mouse
-        if ui.scribble_stack != []:
-            stack = ui.scribble_stack
-            ui.scribble_stack = []
-            ui.last_user_mask = state.user_mask
-            ui.last_labels = state.labelmap
-            yield ("scribble", stack, use_superpixels)
+        if uistate.scribble_stack != []:
+            stack = uistate.scribble_stack
+            uistate.scribble_stack = []
+            uistate.last_user_mask = state.user_mask
+            uistate.last_labels = state.labelmap
+            yield ("scribble", stack)
 
         if k == ord('z'):
-            state.user_mask = ui.last_user_mask
-            state.labelmap = ui.last_labels
-            yield ("iterate", ui.smoothness)
+            state.user_mask = uistate.last_user_mask
+            state.labelmap = uistate.last_labels
+            yield ("iterate",)
 
     # cleanup
     cv2.destroyAllWindows()
     return
 
 
-def draw(state: MultiLabelState, scribble, use_superpixels: bool) -> MultiLabelState:
+def draw(state: MultiLabelState, scribble) -> MultiLabelState:
+    """Draw given scribble on state"""
     for pt1, pt2, mode, label in scribble:
         mask_color = 255 if mode == 'paint' else 0
-        if not use_superpixels:
-            cv2.line(state.labelmap,    pt1, pt2, color=label,      thickness=5)
-            cv2.line(state.user_mask, pt1, pt2, color=mask_color, thickness=5)
-            continue
 
         for _x, _y in np.unique(list(bresenham.bresenham(*pt1, *pt2)), axis=0):
-            r = state.segment_regions[state.segment_labelmap[_y, _x] - 1]
-            state.labelmap[tuple(r.coords.T)] = label
-            state.user_mask[tuple(r.coords.T)] = mask_color
-    return state
-
-
-def update_superpixels(state: MultiLabelState, n_segments: int) -> MultiLabelState:
-    state.n_segments = n_segments
+            reg = state.segment_regions[state.segment_labelmap[_y, _x] - 1]
+            state.labelmap[tuple(reg.coords.T)] = label
+            state.user_mask[tuple(reg.coords.T)] = mask_color
     return state
 
 
 def mouse_callback(
-    ui: UIState, labels: Labels, event, x, y,
-    flags, param,
+    uistate: UIState, labels: Labels, event, x: int, y: int,
+    *_,
 ) -> None:
+    """Mouse event callback for cv2 event listener"""
     if event == cv2.EVENT_RBUTTONDOWN:
-        ui.mode = 'erase'
-        ui.down_at = (x, y)
+        uistate.mode = 'erase'
+        uistate.down_at = (x, y)
     elif event == cv2.EVENT_RBUTTONUP:
-        if ui.down_at is not None:
-            ui.calculation_pending = True
-        ui.mode = None
-        ui.down_at = None
+        if uistate.down_at is not None:
+            uistate.calculation_pending = True
+        uistate.mode = None
+        uistate.down_at = None
 
     if event == cv2.EVENT_LBUTTONDOWN:
-        ui.mode = 'paint'
-        ui.down_at = (x, y)
+        uistate.mode = 'paint'
+        uistate.down_at = (x, y)
     elif event == cv2.EVENT_LBUTTONUP:
-        if ui.down_at is not None:
-            ui.calculation_pending = True
-        ui.mode = None
-        ui.down_at = None
+        if uistate.down_at is not None:
+            uistate.calculation_pending = True
+        uistate.mode = None
+        uistate.down_at = None
 
     elif event == cv2.EVENT_MOUSEMOVE:
-        if ui.down_at is not None:
-            ui.scribble_stack.append((
-                ui.down_at,
+        if uistate.down_at is not None:
+            uistate.scribble_stack.append((
+                uistate.down_at,
                 (x, y),
-                ui.mode,
-                ui.cur_label_idx,
+                uistate.mode,
+                uistate.cur_label_idx,
             ))
-            cv2.line(ui.image,       ui.down_at, (x, y), color=labels[ui.cur_label_idx][2], thickness=5)
-            cv2.line(ui.image_label, ui.down_at, (x, y), color=labels[ui.cur_label_idx][2], thickness=5)
-            ui.down_at = (x, y)
+            cv2.line(uistate.image,       uistate.down_at, (x, y), color=labels[uistate.cur_label_idx][2], thickness=5)
+            cv2.line(uistate.image_label, uistate.down_at, (x, y), color=labels[uistate.cur_label_idx][2], thickness=5)
+            uistate.down_at = (x, y)
