@@ -1,4 +1,4 @@
-# Multi-label GraphCut tool
+# Multiway Minimum Graph Cut based Annotation tool
 
 ![Usage demo](asset/demo.gif)
 
@@ -11,8 +11,6 @@ $ python script/annotate.py $DIR_PATH
 ## Note
 
 This program depends on gco-3.0 and pygco. Please note that gco-3.0 comes with research-only license.
-
-Grab-cut like interface.
 
 ## References
 

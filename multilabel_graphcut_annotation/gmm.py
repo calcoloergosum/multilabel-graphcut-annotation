@@ -1,20 +1,21 @@
 """Gaussian mixture model"""
 from typing import Optional, Tuple
-import numpy as np
-import scipy.stats
-from scipy.special import logsumexp
 
+import numpy as np
+import numpy.typing as npt
+from scipy.special import logsumexp
+import scipy.stats
 
 Model = Tuple[
-    np.ndarray,  # mean
-    np.ndarray,  # covariance
-    np.ndarray,  # mix coefficient
+    npt.NDArray[np.float64],  # mean
+    npt.NDArray[np.float64],  # covariance
+    npt.NDArray[np.float64],  # mix coefficient
 ]
 
 
 def fit_model(
-    vs: np.ndarray,
-    ls: np.ndarray,
+    vs: npt.NDArray[np.float64],
+    ls: npt.NDArray[np.float64],
     n_class: int,
     model: Optional[Model],
 ) -> Optional[Model]:
@@ -46,13 +47,13 @@ def fit_model(
                     (255, 255, 255), (0, 255, 255), (255, 0, 255), (255, 255, 0,),
                 )[:n_gmm]
                 for _ in range(n_class)
-            ], dtype=np.float32)
+            ], dtype=float)
         else:
             raise NotImplementedError(n_gmm)
-        cov_ini = [
+        cov_ini = np.array([
             tuple(128 * 128 * np.identity(vs.shape[-1]) for _ in range(n_gmm))
             for _ in range(n_class)
-        ]
+        ])
     # Interpret input params done
 
     label_means = []
@@ -77,13 +78,14 @@ def fit_model(
         label_means += [gmm_centers]
         label_covars += [gmm_covs]
         mixs += [z.sum(axis=1)]
-    label_means = np.array(label_means)
-    label_covars = np.array(label_covars)
-    mixs = np.array(mixs)
-    return label_means, label_covars, mixs
+    return np.array(label_means), np.array(label_covars), np.array(mixs)
 
 
-def pixelwise_likelihood(vs: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
+def pixelwise_likelihood(
+    vs: npt.NDArray[np.float64],
+    weights: npt.NDArray[np.float64],
+    model: Model
+) -> npt.NDArray[np.float64]:
     """Return pixelwise likelihood
 
     Args:
@@ -96,10 +98,11 @@ def pixelwise_likelihood(vs: np.ndarray, weights: np.ndarray, model: Model) -> n
         np.ndarray: N x label
     """
     label_means, label_covars, mixs = model
-    dev = vs[:, None, None, :] - label_means[None, :, :, :]  # (sites, label, gmm, channel)
+    # (sites, label, gmm, channel)
+    dev = vs[:, None, None, :] - label_means[None, :, :, :]  # type: ignore
     unary = 0.5 * (
         dev[:, :, :, None, :] @
-        np.linalg.inv(label_covars)[None, :, :, :, :] @
+        np.linalg.inv(label_covars)[None, :, :, :, :] @  # type: ignore
         dev[:, :, :, :, None]
     )[:, :, :, 0, 0] * weights[:, None, None]
     unary = - logsumexp(- unary, b=mixs[None, :, :], axis=(2,))  # pylint: disable=invalid-unary-operand-type
@@ -107,10 +110,10 @@ def pixelwise_likelihood(vs: np.ndarray, weights: np.ndarray, model: Model) -> n
 
 
 def solve(
-    rgbs: np.ndarray,
+    rgbs: npt.NDArray[np.float64],
     n_gmm: int,
-    gmm_center_ini: np.ndarray,
-    gmm_cov_ini: np.ndarray,
+    gmm_center_ini: npt.NDArray[np.float64],
+    gmm_cov_ini: npt.NDArray[np.float64],
 ):
     """_summary_
 

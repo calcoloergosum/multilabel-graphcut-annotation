@@ -1,20 +1,22 @@
 """Application is defined here"""
 from __future__ import annotations
 
-import json
+from typing import Any, Iterator, List, Optional, Tuple
 from dataclasses import dataclass
+import json
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import bresenham
 import cv2
 import gco
 import numpy as np
+import numpy.typing as npt
+from skimage.future.graph import RAG, rag_mean_color
 import skimage.measure
 import skimage.segmentation
-from skimage.future.graph import RAG, rag_mean_color
 
 from multilabel_graphcut_annotation.gmm import Model, fit_model, pixelwise_likelihood
+
 # from multilabel_graphcut_annotation.single_gaussian import fit_model, pixelwise_likelihood
 
 
@@ -38,22 +40,22 @@ def read_label_definitions(path: Path) -> Labels:
 class MultiLabelState:
     """Collection of multi-label graph cut related variables"""
     # pylint: disable=too-many-instance-attributes
-    image: np.ndarray     # H x W x C
-    user_mask: np.ndarray # H x W x bool
-    labelmap: np.ndarray    # H x W x int
+    image: npt.NDArray[np.uint8]      # H x W x C
+    user_mask: npt.NDArray[np.uint8]  # H x W, value in {0, 255}
+    labelmap: npt.NDArray[np.uint8]   # H x W, value in [0, n_class)
     model: Optional[Model] = None
 
     # Superpixel
     _n_segments: int = 16384
-    _segment_vis: Optional[np.ndarray] = None
-    _segment_labelmap: Optional[np.ndarray] = None
+    _segment_vis: Optional[npt.NDArray[np.uint8]] = None
+    _segment_labelmap: Optional[npt.NDArray[np.uint8]] = None
     _segment_rag: Optional[RAG] = None
     _segment_regions: Optional[List[skimage.measure._regionprops.RegionProperties]] = None
 
     grabcut_gamma: float = 100.0
 
     @classmethod
-    def new(cls, image: np.ndarray) -> MultiLabelState:
+    def new(cls, image: npt.NDArray[np.uint8]) -> MultiLabelState:
         """Default constructor"""
         return cls(
             image,
@@ -93,7 +95,7 @@ class MultiLabelState:
         self._segment_vis = None
 
     @property
-    def segment_labelmap(self) -> np.ndarray:
+    def segment_labelmap(self) -> npt.NDArray[np.uint8]:
         """cached property of superpixel segments. Pixel -> region id"""
         if self._segment_labelmap is None:
             segment_labelmap = skimage.segmentation.slic(
@@ -131,14 +133,17 @@ class MultiLabelState:
         return self._segment_rag
 
     @property
-    def segment_vis(self) -> np.ndarray:
+    def segment_vis(self) -> npt.NDArray[np.uint8]:
         """cached property of superpixel visualization"""
         if self._segment_vis is None:
             self._segment_vis = visualize_superpixel(self.image, self.segment_regions)
         return self._segment_vis
 
 
-def visualize_superpixel(image: np.ndarray, regions) -> np.ndarray:
+def visualize_superpixel(
+    image: npt.NDArray[np.uint8],
+    regions: List[skimage.measure._regionprops.RegionProperties]
+) -> npt.NDArray[np.uint8]:
     """Return superpixel visualized"""
     superpixels = np.empty_like(image)
     for region in regions:
@@ -152,8 +157,8 @@ class UIState:
     """Collection of UI related variables"""
     # pylint: disable=too-many-instance-attributes
     # Show
-    image:       np.ndarray  # H x W x C
-    image_label: np.ndarray  # H x W x C
+    image:       npt.NDArray[np.uint8]  # H x W x C
+    image_label: npt.NDArray[np.uint8]  # H x W, value in range [0, n_class)
     window_name: str
 
     # Scribble
@@ -170,14 +175,15 @@ class UIState:
     smoothness: int = 1
 
     # Undo
-    last_user_mask: Optional[np.ndarray] = None
-    last_labels: Optional[np.ndarray] = None
+    last_user_mask: Optional[npt.NDArray[np.uint8]] = None
+    last_labels: Optional[npt.NDArray[np.uint8]] = None
 
     @classmethod
-    def new(cls, image: np.ndarray) -> UIState:
+    def new(cls, image: npt.NDArray[np.uint8]) -> UIState:
         """Constructor"""
         return cls(
-            image.copy(), 40 * np.ones_like(image),
+            image.copy(),
+            40 * np.ones_like(image, dtype=np.uint8),  # type: ignore
             'annotation tool',
             scribble_stack=[],
             calculation_pending=False,
@@ -212,7 +218,7 @@ def event_loop(state: MultiLabelState, labels: Labels):
                 raise NotImplementedError(opname, *user_input)
 
 
-def fit(state: MultiLabelState, label2compressed: np.ndarray) -> MultiLabelState:
+def fit(state: MultiLabelState, label2compressed: npt.NDArray[np.uint8]) -> Optional[Model]:
     """Do model fitting here; pixelwise."""
     xs_gt = np.nonzero(state.user_mask.flatten() > 0)
     label_flat = state.labelmap.flatten()
@@ -244,7 +250,7 @@ def iterate(state: MultiLabelState, labels: Labels):
 
     # Routine start
     # fit model
-    state.model = fit(state, label2compressed)
+    state.model = fit(state, label2compressed)  # type: ignore
     if state.model is None:
         return state
 
@@ -298,7 +304,7 @@ def iterate(state: MultiLabelState, labels: Labels):
     return state
 
 
-def user_input_loop(state: MultiLabelState, labels: Labels):
+def user_input_loop(state: MultiLabelState, labels: Labels) -> Iterator[Tuple[Any, ...]]:
     """Loop over user inputs and give commands to the main function"""
     # pylint: disable=too-many-statements,too-many-branches
     uistate = UIState.new(image=state.image)
@@ -309,7 +315,7 @@ def user_input_loop(state: MultiLabelState, labels: Labels):
     cv2.namedWindow('superpixels', cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback('superpixels', lambda *args: mouse_callback(uistate, labels, *args))
 
-    def reload():
+    def reload() -> None:
         uistate.image_label = np.empty_like(state.image)
         for i, label in enumerate(labels):
             uistate.image_label[state.labelmap == i] = label[2]

@@ -2,16 +2,19 @@
 from typing import Optional, Tuple
 
 import numpy as np
+import numpy.typing as npt
 
-BGRMean = np.ndarray
-BGRCovarianceMatrix = np.ndarray
 Model = Tuple[
-    np.ndarray,  # mean
-    np.ndarray,  # covariance
+    npt.NDArray[np.float64],  # mean
+    npt.NDArray[np.float64],  # covariance
 ]
 
 
-def fit_model(vs: np.ndarray, ls: np.ndarray, n_class: int) -> Optional[Model]:
+def fit_model(
+    vs: npt.NDArray[np.float64],
+    ls: npt.NDArray[np.float64],
+    n_class: int
+) -> Optional[Model]:
     """Calculate parameters in MLE manner.
     vs: values of shape (n_data, n_dimension)
     ls: known labels of shape (n_data,), whose values are in range [0, n_class - 1]
@@ -31,7 +34,10 @@ def fit_model(vs: np.ndarray, ls: np.ndarray, n_class: int) -> Optional[Model]:
     return np.array(label_means), np.array(label_covars)
 
 
-def pixelwise_likelihood(image: np.ndarray, model: Model) -> np.ndarray:
+def pixelwise_likelihood(
+    image: npt.NDArray[np.float64],
+    model: Model
+) -> npt.NDArray[np.float64]:
     """Return pixelwise likelihood
 
     Args:
@@ -42,10 +48,10 @@ def pixelwise_likelihood(image: np.ndarray, model: Model) -> np.ndarray:
         np.ndarray: N x label
     """
     label_means, label_covars = model
-    dev = image[:, :, None, :] - label_means[None, None, :, :]
+    dev = image[:, :, None, :] - label_means[None, None, :, :]  # type: ignore
     unary = 0.5 * (
         dev[:, :, :, None, :] @
-        np.linalg.inv(label_covars)[None, None, :, :, :] @
+        np.linalg.inv(label_covars)[None, None, :, :, :] @  # type: ignore
         dev[:, :, :, :, None]
     )[:, :, :, 0, 0]
     return unary
