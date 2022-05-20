@@ -1,5 +1,7 @@
 # Multi-label Annotation tool
 
+![Usage demo](asset/demo.gif)
+
 This program depends on gco-3.0 and pygco.
 Please note that gco-3.0 comes with research-only license.
 
@@ -22,4 +24,5 @@ $ python script/annotate.py $DIR_PATH
     IEEE TPAMI, 26(9):1124-1137, Sep 2004.
 
 [4] Fast Approximate Energy Minimization with Label Costs. 
-        A. Delong, A. Osokin, H. N. Isack, Y. Boykov. In CVPR, June 2010. 
+        A. Delong, A. Osokin, H. N. Isack, Y. Boykov. In CVPR, June 2010.
+ 
