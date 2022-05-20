@@ -1,5 +1,5 @@
 """Gaussian mixture model"""
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 import numpy as np
 import scipy.stats
 from scipy.special import logsumexp

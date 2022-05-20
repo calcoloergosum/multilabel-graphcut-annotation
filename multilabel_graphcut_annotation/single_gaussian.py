@@ -1,5 +1,5 @@
 """Single gaussian fitting. Mainly used for testing"""
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
