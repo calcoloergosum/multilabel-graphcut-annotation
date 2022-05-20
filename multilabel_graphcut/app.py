@@ -215,8 +215,7 @@ def event_loop(state: MultiLabelState, labels: Labels):
 
 
 def fit(state: MultiLabelState, label2compressed: np.ndarray) -> MultiLabelState:
-    """Do model fitting here; pixelwise.
-    """
+    """Do model fitting here; pixelwise."""
     xs_gt = np.nonzero(state.user_mask.flatten() > 0)
     label_flat = state.labelmap.flatten()
     image_flat = state.image.reshape(-1, state.image.shape[-1])

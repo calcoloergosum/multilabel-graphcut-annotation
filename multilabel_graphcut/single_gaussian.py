@@ -7,12 +7,11 @@ BGRMean = np.ndarray
 BGRCovarianceMatrix = np.ndarray
 Model = Tuple[List[BGRMean], List[BGRCovarianceMatrix]]
 
-def fit_model(
-    vs: np.ndarray,
-    ls: np.ndarray,
-    n_class: int,
-) -> Optional[Model]:
-    """Calculate parameters in MLE manner"""
+def fit_model(vs: np.ndarray, ls: np.ndarray, n_class: int) -> Optional[Model]:
+    """Calculate parameters in MLE manner.
+    vs: values of shape (n_data, n_dimension)
+    ls: known labels of shape (n_data,), whose values are in range [0, n_class - 1]
+    """
     label_means = []
     label_covars = []
     for i in range(n_class):

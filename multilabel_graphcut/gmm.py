@@ -1,5 +1,5 @@
 """Gaussian mixture model"""
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import numpy as np
 import scipy.stats
 from scipy.special import logsumexp
@@ -15,7 +15,20 @@ def fit_model(
     ls: np.ndarray,
     n_class: int,
     model: Model,
-):
+) -> Optional[Model]:
+    """Fit gaussian mixture using EM-like momentum method.
+
+    Args:
+        vs (np.ndarray): values of shape (n_data, n_dimension)
+        ls (np.ndarray): known labels of shape (n_data,), whose values are in range [0, n_class - 1]
+        model (Model): model to use as a starting point
+
+    Returns:
+        None if fitting failed for whatever reason.
+        Otherwise, return means, covariance matrices, mix coefficients,
+            whose shapes are (n_gmm, C), (n_gmm, C, C), (n_gmm,) respectively.
+    """
+    # pylint: disable=too-many-locals,invalid-name
     n_gmm = 4  # hardcode :)
 
     # Interpret input params
@@ -47,7 +60,7 @@ def fit_model(
         bgrs = vs[ls == i]
         if len(bgrs) <= 2:
             print(f"Need more label on class {i}")
-            return
+            return None
 
         solver = solve(
             bgrs,
@@ -68,25 +81,26 @@ def fit_model(
     return label_means, label_covars, mixs
 
 
-def pixelwise_likelihood(image: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
+def pixelwise_likelihood(vs: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
     """Return pixelwise likelihood
 
     Args:
-        image (np.ndarray): of shape (N, C)
-        weights (np.ndarray): sample size used to derive each value of given image. e.g. Area of superpixels
-        model (Model): model
+        vs (np.ndarray):      values of shape (n_data, n_dimension)
+        weights (np.ndarray): sample size used to derive each value of given values.
+                              e.g. Area of superpixels
+        model (Model):        model to be used for calculating likelihood
 
     Returns:
         np.ndarray: N x label
     """
     label_means, label_covars, mixs = model
-    dev = image[:, None, None, :] - label_means[None, :, :, :]  # (pixels, label, gmm, C)
+    dev = vs[:, None, None, :] - label_means[None, :, :, :]  # (sites, label, gmm, channel)
     unary = 0.5 * (
         dev[:, :, :, None, :] @
         np.linalg.inv(label_covars)[None, :, :, :, :] @
         dev[:, :, :, :, None]
     )[:, :, :, 0, 0] * weights[:, None, None]
-    unary = - logsumexp(- unary, b=mixs[None, :, :], axis=(2,))
+    unary = - logsumexp(- unary, b=mixs[None, :, :], axis=(2,))  # pylint: disable=invalid-unary-operand-type
     return unary
 
 
@@ -107,7 +121,7 @@ def solve(
     Yields:
         _type_: _description_
     """
-    # init
+    # pylint: disable=invalid-name
     gmm_center = np.array(gmm_center_ini, dtype=np.float32)
     gmm_cov = np.array(gmm_cov_ini, dtype=np.float32)
     del gmm_center_ini, gmm_cov_ini
