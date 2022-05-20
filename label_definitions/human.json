@@ -12,7 +12,7 @@
         "key": "f",
         "color": [180, 180, 255]
     },
-    "neck": {
+    "other skin": {
         "key": "n",
         "color": [130, 130, 170]
     },
@@ -20,13 +20,9 @@
         "key": "l",
         "color": [0, 0, 255]
     },
-    "eye(side)": {
+    "eye": {
         "key": "w",
         "color": [255, 255, 255]
-    },
-    "eye(center)": {
-        "key": "c",
-        "color": [0, 255, 0]
     },
     "eyebrow": {
         "key": "b",

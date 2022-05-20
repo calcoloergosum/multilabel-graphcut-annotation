@@ -15,7 +15,7 @@ def fit_model(
     n_class: int,
     model: Model,
 ):
-    n_gmm = 3  # hardcode :)
+    n_gmm = 4  # hardcode :)
 
     # Interpret input params
     if model is not None:
@@ -67,14 +67,14 @@ def fit_model(
     return label_means, label_covars, mixs
 
 
-def get_unary(image: np.ndarray, model: Model) -> np.ndarray:
+def get_unary(image: np.ndarray, weights: np.ndarray, model: Model) -> np.ndarray:
     label_means, label_covars, mixs = model
     dev = image[:, None, None, :] - label_means[None, :, :, :]  # (pixels, label, gmm, C)
     unary = 0.5 * (
         dev[:, :, :, None, :] @
         np.linalg.inv(label_covars)[None, :, :, :, :] @
         dev[:, :, :, :, None]
-    )[:, :, :, 0, 0]
+    )[:, :, :, 0, 0] * weights[:, None, None]
     unary = - logsumexp(- unary, b=mixs[None, :, :], axis=(2,))
     return unary
 
@@ -131,14 +131,17 @@ def solve(
         # debug end
         for i_gmm in range(n_gmm):
             if z_sum[i_gmm] < 1e-7:
-                raise RuntimeError("Overfitting way too far")
+                raise RuntimeError("Overfit")
             mean = (rgbs * z[i_gmm, :, None]).sum(axis=0) / z_sum[i_gmm]
             dev = rgbs - mean
             cov = dev.T @ (dev * z[i_gmm, :, None]) / z_sum[i_gmm]
 
+            # slightly slower convergence
             gmm_center[i_gmm] = 0.8 * gmm_center[i_gmm] + 0.2 * mean
-            assert np.all(np.linalg.eigvals(cov) >= 0), "Numerical error?"
             gmm_cov[i_gmm] = 0.8 * gmm_cov[i_gmm] + 0.2 * cov
+        if np.any(np.linalg.eigvals(cov) <= 0):
+            # numerical error; indicates that overfitting is happening.
+            raise RuntimeError("Numerical Error")
 
         # debug start
         # for i in range(i_gmm):

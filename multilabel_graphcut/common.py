@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -19,7 +19,7 @@ Labels = List[Tuple[str, str, BGRColor]]
 class MultiLabelState:
     image: np.ndarray     # H x W x C
     user_mask: np.ndarray # H x W x bool
-    labels: np.ndarray    # H x W x int
+    labelmap: np.ndarray    # H x W x int
     model: Optional[Any]
 
     # Superpixel
@@ -29,13 +29,14 @@ class MultiLabelState:
     _segment_rag: RAG = None
     _segment_regions: List = None
 
+    grabcut_gamma: float = 100.0
+
     @classmethod
     def new(cls, image: np.ndarray) -> MultiLabelState:
         return cls(
             image,
             np.zeros(image.shape[:2], dtype=np.uint8),
             np.zeros(image.shape[:2], dtype=np.uint8),
-            None,
             None,
         )
 
@@ -53,7 +54,7 @@ class MultiLabelState:
     def save(self, path: Path) -> None:
         path.mkdir(exist_ok=True, parents=False)
         cv2.imwrite((path / "image.png").as_posix(), self.image)
-        cv2.imwrite((path / "labels.png").as_posix(), self.labels)
+        cv2.imwrite((path / "labels.png").as_posix(), self.labelmap)
         cv2.imwrite((path / "user_mask.png").as_posix(), self.user_mask)
 
     # superpixel related
@@ -99,7 +100,7 @@ class MultiLabelState:
     @property
     def segment_rag(self) -> RAG:
         if self._segment_rag is None:
-            self._segment_rag = rag_mean_color(self.image, self.segment_labelmap, connectivity=1)
+            self._segment_rag = rag_mean_color(self.image, self.segment_labelmap, connectivity=2)
         return self._segment_rag
 
     @property
