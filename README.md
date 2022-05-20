@@ -1,15 +1,18 @@
-# Multi-label Graph Cut Annotation tool
+# Multi-label GraphCut tool
 
 ![Usage demo](asset/demo.gif)
-
-This program depends on gco-3.0 and pygco.
-Please note that gco-3.0 comes with research-only license.
 
 ## Use
 
 ```bash
 $ python script/annotate.py $DIR_PATH
 ```
+
+## Note
+
+This program depends on gco-3.0 and pygco. Please note that gco-3.0 comes with research-only license.
+
+Grab-cut like interface.
 
 ## References
 

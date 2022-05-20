@@ -1,4 +1,4 @@
 bresenham
-gco-python
-opencv
+opencv-python
+gco-wrapper
 scikit-image
