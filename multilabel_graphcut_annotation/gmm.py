@@ -143,14 +143,14 @@ def solve(
     while True:
         for i_gmm in range(n_gmm):
             nll[i_gmm, :] = - scipy.stats.multivariate_normal.logpdf(
-                rgbs[0],
+                rgbs,
                 mean=gmm_center[i_gmm],
                 cov=gmm_cov[i_gmm]
             )
 
         z = np.exp(- nll)
         z /= z.sum(axis=0)
-        yield nll, z
+        yield nll.copy(), z.copy()
         z_sum = z.sum(axis=1)
 
         # debug start
@@ -179,4 +179,4 @@ def solve(
         #     max_eig = np.sqrt(np.linalg.eigvals(gmm_cov[i])).max()
         #     print(f"{i}: {c}, {max_eig}")
         # debug end
-        yield gmm_center, gmm_cov
+        yield gmm_center.copy(), gmm_cov.copy()

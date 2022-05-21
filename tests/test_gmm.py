@@ -20,7 +20,7 @@ from multilabel_graphcut_annotation.gmm import solve
             10 + np.random.normal(size=(100000, 2)),
         )),
         ((-1, -1), (100, 100,)),
-        (((1, 0), (0, 1)), ((100, 0,), (0, 100,))),
+        (((1, 0), (0, 1)), ((1e4, 0,), (0, 1e4,))),
         ((0, 0), (10, 10)),
         (((1, 0), (0, 1)), ((1, 0), (0, 1))),
     ),
@@ -46,9 +46,21 @@ def test_gmm(cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,)
         gmm_center_ini=gmm_center_ini,
         gmm_cov_ini=gmm_cov_ini,
     )
-    for _ in range(10):
-        nll, z = next(solver)
+    _, _ = next(solver)
+    _gmm_centers, _ = next(solver)
+    while True:
+        _, _ = next(solver)
         gmm_centers, gmm_cov = next(solver)
+        dev = gmm_centers - _gmm_centers
+        if np.sqrt(
+            np.linalg.norm(
+                dev[:, None, :] @
+                np.linalg.inv(gmm_cov[:, :, :]) @
+                dev[:, :, None]
+            )
+        ).min(axis=0) < 1e-4:
+            break
+        _gmm_centers, _ = gmm_centers, gmm_cov
 
     np.testing.assert_allclose(gmm_centers, gmm_center_exp, atol=1e-2)
     np.testing.assert_allclose(gmm_cov, gmm_cov_exp, atol=1e-2)
