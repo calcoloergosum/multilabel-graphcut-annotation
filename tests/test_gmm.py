@@ -3,11 +3,11 @@ import pytest
 from multilabel_graphcut_annotation.gmm import solve
 
 
-@pytest.mark.parametrize('cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp', [
+@pytest.mark.parametrize('pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp', [
     (
         np.vstack((
-            0  + np.random.normal(size=(100000, 1)),
-            10 + np.random.normal(size=(100000, 1)),
+            0  + np.random.normal(size=(1000, 1)),
+            10 + np.random.normal(size=(1000, 1)),
         )),
         ((-1,), (3,),),
         (((1,),), ((2,),)),
@@ -25,14 +25,14 @@ from multilabel_graphcut_annotation.gmm import solve
         (((1, 0), (0, 1)), ((1, 0), (0, 1))),
     ),
 ])
-def test_gmm(cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,):
+def test_gmm(pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,):
     gmm_center_ini = np.array(gmm_center_ini)
     gmm_cov_ini = np.array(gmm_cov_ini)
     gmm_center_exp = np.array(gmm_center_exp)
     gmm_cov_exp = np.array(gmm_cov_exp)
 
-    n_data = cls2pts.shape[0]
-    n_dim = cls2pts.shape[-1]
+    n_data = pts.shape[0]
+    n_dim = pts.shape[-1]
     n_gmm = gmm_center_ini.shape[0]
     assert n_gmm == gmm_center_ini.shape[0], "test wrong"
     assert n_gmm == gmm_cov_ini.shape[0], "test wrong"
@@ -41,13 +41,13 @@ def test_gmm(cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,)
     assert n_dim == gmm_cov_ini.shape[2], "test wrong"
 
     solver = solve(
-        cls2pts,
+        pts,
         n_gmm=n_gmm,
         gmm_center_ini=gmm_center_ini,
         gmm_cov_ini=gmm_cov_ini,
     )
     _, _ = next(solver)
-    _gmm_centers, _ = next(solver)
+    _gmm_centers, _gmm_cov = next(solver)
     while True:
         _, _ = next(solver)
         gmm_centers, gmm_cov = next(solver)
@@ -58,9 +58,9 @@ def test_gmm(cls2pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,)
                 np.linalg.inv(gmm_cov[:, :, :]) @
                 dev[:, :, None]
             )
-        ).min(axis=0) < 1e-4:
+        ).min(axis=0) < 1e-4 and np.sqrt(((gmm_cov - _gmm_cov) ** 2).sum()) < 1e-4:
             break
-        _gmm_centers, _ = gmm_centers, gmm_cov
+        _gmm_centers, _gmm_cov = gmm_centers, gmm_cov
 
     np.testing.assert_allclose(gmm_centers, gmm_center_exp, atol=1e-2)
     np.testing.assert_allclose(gmm_cov, gmm_cov_exp, atol=1e-2)
