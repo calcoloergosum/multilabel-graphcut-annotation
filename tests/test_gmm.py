@@ -6,8 +6,8 @@ from multilabel_graphcut_annotation.gmm import solve
 @pytest.mark.parametrize('pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp', [
     (
         np.vstack((
-            0  + np.random.normal(size=(1000, 1)),
-            10 + np.random.normal(size=(1000, 1)),
+            0  + np.random.normal(size=(100000, 1)),
+            10 + np.random.normal(size=(100000, 1)),
         )),
         ((-1,), (3,),),
         (((1,),), ((2,),)),
@@ -58,7 +58,7 @@ def test_gmm(pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,):
                 np.linalg.inv(gmm_cov[:, :, :]) @
                 dev[:, :, None]
             )
-        ).min(axis=0) < 1e-4 and np.sqrt(((gmm_cov - _gmm_cov) ** 2).sum()) < 1e-4:
+        ).min(axis=0) < 1e-7 and np.sqrt(((gmm_cov - _gmm_cov) ** 2).sum()) < 1e-7:
             break
         _gmm_centers, _gmm_cov = gmm_centers, gmm_cov
 
