@@ -1,5 +1,7 @@
 # Multiway Minimum Graph Cut based Annotation tool
 
+![build](https://github.com/studentofkyoto/multilabel-graphcut-annotation/actions/workflows/pythonpackage.yml/badge.svg)
+
 ![Usage demo](asset/demo.gif)
 
 ## Use
