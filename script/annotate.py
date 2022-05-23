@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from pathlib import Path
+import random
 
 import cv2
 from multilabel_graphcut_annotation.app import event_loop, MultiLabelState, read_label_definitions
@@ -18,16 +19,15 @@ def main():
     labels = read_label_definitions(args.label_config)
 
     # event loop
-    for p in sorted(args.dir.rglob(args.filename_pattern)):
+    all_files = sorted(args.dir.rglob(args.filename_pattern))
+    random.shuffle(all_files)
+    for p in all_files:
         save_dir = args.out / p.relative_to(args.dir).parent
         save_dir.mkdir(exist_ok=True, parents=True)
-        save_label = save_dir / f"{p.stem}_label.png"
-        save_image = save_dir / f"{p.stem}_image.png"
-        save_mask = save_dir / f"{p.stem}_mask.png"
-
-        if save_label.exists() and save_image.exists() and save_mask.exists():
+        if MultiLabelState.exists(save_dir, p.stem):
             continue
 
+        print(f"[*] Annotating {p.as_posix()}")
         image = cv2.imread(p.as_posix())
         assert image is not None
 

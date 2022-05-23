@@ -6,6 +6,8 @@ __pycache__/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+*.egg-info
+.eggs
 
 # Unit test / coverage reports
 htmlcov/

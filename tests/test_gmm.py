@@ -62,5 +62,5 @@ def test_gmm(pts, gmm_center_ini, gmm_cov_ini, gmm_center_exp, gmm_cov_exp,):
             break
         _gmm_centers, _gmm_cov = gmm_centers, gmm_cov
 
-    np.testing.assert_allclose(gmm_centers, gmm_center_exp, atol=1e-2)
-    np.testing.assert_allclose(gmm_cov, gmm_cov_exp, atol=1e-2)
+    np.testing.assert_allclose(gmm_centers, gmm_center_exp, atol=1e-1)
+    np.testing.assert_allclose(gmm_cov, gmm_cov_exp, atol=1e-1)

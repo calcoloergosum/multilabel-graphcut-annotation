@@ -52,6 +52,8 @@ class MultiLabelState:
     _segment_rag: Optional[RAG] = None
     _segment_regions: Optional[List[skimage.measure._regionprops.RegionProperties]] = None
 
+    _graph: gco.pygco.GCO = None
+
     grabcut_gamma: float = 100.0
 
     @classmethod
@@ -69,15 +71,15 @@ class MultiLabelState:
         return cls(
             cv2.imread((path / f"{prefix}_image.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
             cv2.imread((path / f"{prefix}_user_mask.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
-            cv2.imread((path / f"{prefix}_labels.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
+            cv2.imread((path / f"{prefix}_label.png").as_posix(), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH),
         )
 
     def save(self, path: Path, prefix: str) -> None:
         """Save to a file so that it can be continued later"""
         path.mkdir(exist_ok=True, parents=False)
-        cv2.imwrite((path / f"{prefix}_image.png").as_posix(), self.image)
-        cv2.imwrite((path / f"{prefix}_labels.png").as_posix(), self.labelmap)
-        cv2.imwrite((path / f"{prefix}_user_mask.png").as_posix(), self.user_mask)
+        assert cv2.imwrite((path / f"{prefix}_image.png").as_posix(), self.image)
+        assert cv2.imwrite((path / f"{prefix}_label.png").as_posix(), self.labelmap)
+        assert cv2.imwrite((path / f"{prefix}_user_mask.png").as_posix(), self.user_mask)
 
     # superpixel related
     @property
@@ -138,6 +140,14 @@ class MultiLabelState:
         if self._segment_vis is None:
             self._segment_vis = visualize_superpixel(self.image, self.segment_regions)
         return self._segment_vis
+
+    @classmethod
+    def exists(cls, save_dir: Path, prefix: str):
+        """Return if exists or not without actually loading"""
+        save_label = save_dir / f"{prefix}_label.png"
+        save_image = save_dir / f"{prefix}_image.png"
+        save_mask = save_dir / f"{prefix}_user_mask.png"
+        return save_label.exists() and save_image.exists() and save_mask.exists()
 
 
 def visualize_superpixel(
