@@ -1,4 +1,4 @@
-# Multiway Minimum Graph Cut based Annotation tool
+# Multiway Minimum Graph Cut based Semantic Segmentation Annotation Tool
 
 ![build](https://github.com/studentofkyoto/multilabel-graphcut-annotation/actions/workflows/pythonpackage.yml/badge.svg)
 
@@ -10,9 +10,11 @@
 $ python script/annotate.py $DIR_PATH
 ```
 
+All files under `$DIR_PATH$` is searched.
+
 ## Note
 
-This program depends on gco-3.0 and pygco. Please note that gco-3.0 comes with research-only license.
+This program depends on `gco-3.0` and `pygco`. Please note that `gco-3.0` comes with [research-only license](https://vision.cs.uwaterloo.ca/code/).
 
 ## References
 

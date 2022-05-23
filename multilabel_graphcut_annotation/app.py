@@ -17,8 +17,6 @@ import skimage.segmentation
 
 from multilabel_graphcut_annotation.gmm import Model, fit_model, pixelwise_likelihood
 
-# from multilabel_graphcut_annotation.single_gaussian import fit_model, pixelwise_likelihood
-
 
 Point2i = Tuple[int, int]
 BGRColor = Tuple[float, float, float]
